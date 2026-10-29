@@ -1,4 +1,4 @@
-name: Build Local Web Streamer APK
+name: Build Local Web Streamer APK v2
 
 on:
   push:
@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate Local Streamer Project
+      - name: Generate Local Streamer Project v2
         run: |
           python3 - << 'EOF'
           import os
@@ -57,8 +57,8 @@ jobs:
                           applicationId "com.example.localstreamer"
                           minSdk 26
                           targetSdk 34
-                          versionCode 1
-                          versionName "1.0"
+                          versionCode 2
+                          versionName "2.0"
                       }
 
                       buildTypes {
@@ -119,7 +119,7 @@ jobs:
                       <TextView
                           android:layout_width="wrap_content"
                           android:layout_height="wrap_content"
-                          android:text="🏠 Local Home Streamer"
+                          text="🏠 Local Home Streamer v2.0"
                           android:textColor="#00e676"
                           android:textSize="22sp"
                           android:textStyle="bold"
@@ -129,7 +129,7 @@ jobs:
                           android:id="@+id/tv_status"
                           android:layout_width="wrap_content"
                           android:layout_height="wrap_content"
-                          android:text="สถานะ: พร้อมเริ่มเปิดเซิร์ฟเวอร์"
+                          text="สถานะ: พร้อมเริ่มเปิดเซิร์ฟเวอร์สตรีมภาพ"
                           android:textColor="#e0e0e0"
                           android:textSize="14sp"
                           android:paddingBottom="30dp"
@@ -139,7 +139,7 @@ jobs:
                           android:id="@+id/btn_toggle"
                           android:layout_width="match_parent"
                           android:layout_height="60dp"
-                          android:text="🚀 เริ่มแชร์หน้าจอ (Start Server)"
+                          text="🚀 เริ่มแชร์หน้าจอสด (Start Server)"
                           android:backgroundTint="#00c853"
                           android:textColor="#ffffff"
                           android:textSize="16sp"
@@ -154,15 +154,26 @@ jobs:
                   import android.app.Activity;
                   import android.content.Context;
                   import android.content.Intent;
+                  import android.graphics.Bitmap;
+                  import android.graphics.PixelFormat;
+                  import android.hardware.display.DisplayManager;
+                  import android.hardware.display.VirtualDisplay;
+                  import android.media.Image;
+                  import android.media.ImageReader;
+                  import android.media.projection.MediaProjection;
                   import android.media.projection.MediaProjectionManager;
                   import android.net.wifi.WifiManager;
                   import android.os.Bundle;
+                  import android.os.Handler;
+                  import android.os.Looper;
                   import android.text.format.Formatter;
                   import android.widget.Button;
                   import android.widget.TextView;
                   import android.widget.Toast;
 
+                  import java.io.ByteArrayOutputStream;
                   import java.io.IOException;
+                  import java.nio.ByteBuffer;
                   import fi.iki.elonen.NanoHTTPD;
 
                   public class MainActivity extends Activity {
@@ -173,6 +184,12 @@ jobs:
                       private boolean isRunning = false;
                       private static final int PORT = 8080;
 
+                      private MediaProjectionManager projectionManager;
+                      private MediaProjection mediaProjection;
+                      private VirtualDisplay virtualDisplay;
+                      private ImageReader imageReader;
+                      private static byte[] latestJpeg = null;
+
                       @Override
                       protected void onCreate(Bundle savedInstanceState) {
                           super.onCreate(savedInstanceState);
@@ -181,29 +198,56 @@ jobs:
                           tvStatus = findViewById(R.id.tv_status);
                           btnToggle = findViewById(R.id.btn_toggle);
 
+                          projectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+
                           btnToggle.setOnClickListener(v -> {
                               if (!isRunning) {
-                                  startScreenCapturePermission();
+                                  startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE);
                               } else {
                                   stopServer();
                               }
                           });
                       }
 
-                      private void startScreenCapturePermission() {
-                          MediaProjectionManager projectionManager =
-                                  (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-                          startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE);
-                      }
-
                       @Override
                       protected void onActivityResult(int requestCode, int resultCode, Intent data) {
                           super.onActivityResult(requestCode, resultCode, data);
                           if (requestCode == REQUEST_CODE && resultCode == RESULT_OK) {
+                              mediaProjection = projectionManager.getMediaProjection(resultCode, data);
+                              startVirtualDisplay();
                               startServer();
                           } else {
                               Toast.makeText(this, "ถูกปฏิเสธสิทธิ์การบันทึกหน้าจอ", Toast.LENGTH_SHORT).show();
                           }
+                      }
+
+                      private void startVirtualDisplay() {
+                          int width = 720;
+                          int height = 1280;
+                          imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
+                          virtualDisplay = mediaProjection.createVirtualDisplay("ScreenCapture",
+                                  width, height, getResources().getDisplayMetrics().densityDpi,
+                                  DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                                  imageReader.getSurface(), null, null);
+
+                          imageReader.setOnImageAvailableListener(reader -> {
+                              Image image = reader.acquireLatestImage();
+                              if (image != null) {
+                                  Image.Plane[] planes = image.getPlanes();
+                                  ByteBuffer buffer = planes[0].getBuffer();
+                                  int pixelStride = planes[0].getPixelStride();
+                                  int rowStride = planes[0].getRowStride();
+                                  int rowPadding = rowStride - pixelStride * image.getWidth();
+
+                                  Bitmap bitmap = Bitmap.createBitmap(image.getWidth() + rowPadding / pixelStride, image.getHeight(), Bitmap.Config.ARGB_8888);
+                                  bitmap.copyPixelsFromBuffer(buffer);
+                                  image.close();
+
+                                  ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                  bitmap.compress(Bitmap.CompressFormat.JPEG, 50, baos);
+                                  latestJpeg = baos.toByteArray();
+                              }
+                          }, new Handler(Looper.getMainLooper()));
                       }
 
                       private void startServer() {
@@ -215,7 +259,7 @@ jobs:
                               String ipAddress = getLocalIpAddress();
                               String url = "http://" + ipAddress + ":" + PORT;
 
-                              tvStatus.setText("🟢 เซิร์ฟเวอร์ทำงานแล้ว!\\n\\nเปิด Browser ที่เครื่องอื่นแล้วพิมพ์:\\n" + url);
+                              tvStatus.setText("🟢 สตรีมเซิร์ฟเวอร์ทำงานแล้ว!\\n\\nเปิด Browser ที่เครื่องอื่นแล้วพิมพ์:\\n" + url);
                               btnToggle.setText("⏹️ หยุดการแชร์ (Stop)");
                               btnToggle.setBackgroundColor(android.graphics.Color.parseColor("#d32f2f"));
 
@@ -230,9 +274,12 @@ jobs:
                               webServer.stop();
                               webServer = null;
                           }
+                          if (virtualDisplay != null) { virtualDisplay.release(); }
+                          if (mediaProjection != null) { mediaProjection.stop(); }
                           isRunning = false;
+
                           tvStatus.setText("สถานะ: ปิดการทำงานแล้ว");
-                          btnToggle.setText("🚀 เริ่มแชร์หน้าจอ (Start Server)");
+                          btnToggle.setText("🚀 เริ่มแชร์หน้าจอสด (Start Server)");
                           btnToggle.setBackgroundColor(android.graphics.Color.parseColor("#00c853"));
                       }
 
@@ -241,7 +288,6 @@ jobs:
                           return Formatter.formatIpAddress(wifiManager.getConnectionInfo().getIpAddress());
                       }
 
-                      // Embedded Local Web Server (NanoHTTPD)
                       private static class LocalWebServer extends NanoHTTPD {
                           public LocalWebServer(int port) {
                               super(port);
@@ -249,15 +295,46 @@ jobs:
 
                           @Override
                           public Response serve(IHTTPSession session) {
+                              String uri = session.getUri();
+                              if ("/stream".equals(uri)) {
+                                  return new ChunkedResponse();
+                              }
+
                               String html = "<Html><head><title>Home Streamer</title>" +
                                       "<meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1.0\\">" +
-                                      "<style>body{background:#111;color:#fff;text-align:center;font-family:sans-serif;padding-top:50px;}" +
-                                      "h1{color:#00e676;}</style></head>" +
-                                      "<body><h1>🏠 Home Streamer Active</h1>" +
-                                      "<p>ระบบสตรีมภายในบ้านพร้อมใช้งาน</p>" +
-                                      "<p style=\\"color:#aaa;font-size:14px;\\">กำลังถ่ายทอดสัญญาณภาพและเสียงจากเครื่องแม่ข่าย...</p>" +
+                                      "<style>body{background:#111;color:#fff;text-align:center;font-family:sans-serif;margin:0;padding:20px;}" +
+                                      "h2{color:#00e676;margin:5px;}" +
+                                      "img{max-width:100%;height:auto;border:2px solid #00e676;border-radius:8px;margin-top:10px;}</style>" +
+                                      "</head><body>" +
+                                      "<h2>🏠 Home Screen Stream</h2>" +
+                                      "<p style=\\"color:#aaa;font-size:12px;\\">ถ่ายทอดสดหน้าจอแบบเรียลไทม์ภายในบ้าน</p>" +
+                                      "<img src=\\"/stream\\" />" +
                                       "</body></html>";
                               return newFixedLengthResponse(Response.Status.OK, "text/html", html);
+                          }
+                      }
+
+                      private static class ChunkedResponse extends NanoHTTPD.Response {
+                          public ChunkedResponse() {
+                              super(NanoHTTPD.Status.OK, "multipart/x-mixed-replace; boundary=frame", null);
+                          }
+
+                          @Override
+                          protected void send(java.io.OutputStream outputStream) {
+                              try {
+                                  while (latestJpeg != null) {
+                                      if (latestJpeg.length > 0) {
+                                          String header = "--frame\\r\\nContent-Type: image/jpeg\\r\\nContent-Length: " + latestJpeg.length + "\\r\\n\\r\\n";
+                                          outputStream.write(header.getBytes());
+                                          outputStream.write(latestJpeg);
+                                          outputStream.write("\\r\\n".getBytes());
+                                          outputStream.flush();
+                                      }
+                                      Thread.sleep(100); // ประมาณ 10 เฟรมต่อวินาที เพื่อความลื่นไหลในวงแลนด์
+                                  }
+                              } catch (Exception e) {
+                                  // Client disconnected or stream stopped
+                              }
                           }
                       }
 
@@ -277,7 +354,7 @@ jobs:
               with open(full_path, "w", encoding="utf-8") as f:
                   f.write(clean_content)
 
-          print("Local Streamer Project generated successfully!")
+          print("Local Streamer Project v2 generated successfully!")
           EOF
 
       - name: Set up JDK 17
@@ -288,8 +365,6 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.4'
 
       - name: Build Debug APK
         working-directory: ./LocalStreamerProject
@@ -298,5 +373,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LocalStreamer-v1.0-APK
+          name: LocalStreamer-v2.0-APK
           path: LocalStreamerProject/app/build/outputs/apk/debug/app-debug.apk
