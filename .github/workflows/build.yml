@@ -1,4 +1,4 @@
-name: Build Local Web Streamer APK v2
+name: Build Local Web Streamer APK v2.1
 
 on:
   push:
@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate Local Streamer Project v2
+      - name: Generate Local Streamer Project v2.1
         run: |
           python3 - << 'EOF'
           import os
@@ -57,8 +57,8 @@ jobs:
                           applicationId "com.example.localstreamer"
                           minSdk 26
                           targetSdk 34
-                          versionCode 2
-                          versionName "2.0"
+                          versionCode 3
+                          versionName "2.1"
                       }
 
                       buildTypes {
@@ -119,7 +119,7 @@ jobs:
                       <TextView
                           android:layout_width="wrap_content"
                           android:layout_height="wrap_content"
-                          text="🏠 Local Home Streamer v2.0"
+                          android:text="🏠 Local Home Streamer v2.1"
                           android:textColor="#00e676"
                           android:textSize="22sp"
                           android:textStyle="bold"
@@ -129,7 +129,7 @@ jobs:
                           android:id="@+id/tv_status"
                           android:layout_width="wrap_content"
                           android:layout_height="wrap_content"
-                          text="สถานะ: พร้อมเริ่มเปิดเซิร์ฟเวอร์สตรีมภาพ"
+                          android:text="สถานะ: พร้อมเริ่มเปิดเซิร์ฟเวอร์สตรีมภาพ"
                           android:textColor="#e0e0e0"
                           android:textSize="14sp"
                           android:paddingBottom="30dp"
@@ -139,7 +139,7 @@ jobs:
                           android:id="@+id/btn_toggle"
                           android:layout_width="match_parent"
                           android:layout_height="60dp"
-                          text="🚀 เริ่มแชร์หน้าจอสด (Start Server)"
+                          android:text="🚀 เริ่มแชร์หน้าจอสด (Start Server)"
                           android:backgroundTint="#00c853"
                           android:textColor="#ffffff"
                           android:textSize="16sp"
@@ -330,10 +330,9 @@ jobs:
                                           outputStream.write("\\r\\n".getBytes());
                                           outputStream.flush();
                                       }
-                                      Thread.sleep(100); // ประมาณ 10 เฟรมต่อวินาที เพื่อความลื่นไหลในวงแลนด์
+                                      Thread.sleep(100);
                                   }
                               } catch (Exception e) {
-                                  // Client disconnected or stream stopped
                               }
                           }
                       }
@@ -354,7 +353,7 @@ jobs:
               with open(full_path, "w", encoding="utf-8") as f:
                   f.write(clean_content)
 
-          print("Local Streamer Project v2 generated successfully!")
+          print("Local Streamer Project v2.1 generated successfully!")
           EOF
 
       - name: Set up JDK 17
@@ -363,9 +362,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
       - name: Build Debug APK
         working-directory: ./LocalStreamerProject
         run: gradle assembleDebug
@@ -373,5 +369,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LocalStreamer-v2.0-APK
+          name: LocalStreamer-v2.1-APK
           path: LocalStreamerProject/app/build/outputs/apk/debug/app-debug.apk
