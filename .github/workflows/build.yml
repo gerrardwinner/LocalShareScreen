@@ -1,4 +1,4 @@
-name: Build Local Web Streamer APK v2.1
+name: Build Local Web Streamer APK v2.3
 
 on:
   push:
@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate Local Streamer Project v2.1
+      - name: Generate Local Streamer Project v2.3
         run: |
           python3 - << 'EOF'
           import os
@@ -57,8 +57,8 @@ jobs:
                           applicationId "com.example.localstreamer"
                           minSdk 26
                           targetSdk 34
-                          versionCode 3
-                          versionName "2.1"
+                          versionCode 5
+                          versionName "2.3"
                       }
 
                       buildTypes {
@@ -102,6 +102,12 @@ jobs:
                               </intent-filter>
                           </activity>
 
+                          <service
+                              android:name=".StreamService"
+                              android:enabled="true"
+                              android:exported="false"
+                              android:foregroundServiceType="mediaProjection" />
+
                       </application>
                   </manifest>
               """,
@@ -119,7 +125,7 @@ jobs:
                       <TextView
                           android:layout_width="wrap_content"
                           android:layout_height="wrap_content"
-                          android:text="🏠 Local Home Streamer v2.1"
+                          android:text="🏠 Local Home Streamer v2.3"
                           android:textColor="#00e676"
                           android:textSize="22sp"
                           android:textStyle="bold"
@@ -154,41 +160,22 @@ jobs:
                   import android.app.Activity;
                   import android.content.Context;
                   import android.content.Intent;
-                  import android.graphics.Bitmap;
-                  import android.graphics.PixelFormat;
-                  import android.hardware.display.DisplayManager;
-                  import android.hardware.display.VirtualDisplay;
-                  import android.media.Image;
-                  import android.media.ImageReader;
-                  import android.media.projection.MediaProjection;
                   import android.media.projection.MediaProjectionManager;
                   import android.net.wifi.WifiManager;
+                  import android.os.Build;
                   import android.os.Bundle;
-                  import android.os.Handler;
-                  import android.os.Looper;
                   import android.text.format.Formatter;
                   import android.widget.Button;
                   import android.widget.TextView;
                   import android.widget.Toast;
 
-                  import java.io.ByteArrayOutputStream;
-                  import java.io.IOException;
-                  import java.nio.ByteBuffer;
-                  import fi.iki.elonen.NanoHTTPD;
-
                   public class MainActivity extends Activity {
                       private static final int REQUEST_CODE = 1000;
                       private TextView tvStatus;
                       private Button btnToggle;
-                      private LocalWebServer webServer;
                       private boolean isRunning = false;
                       private static final int PORT = 8080;
-
                       private MediaProjectionManager projectionManager;
-                      private MediaProjection mediaProjection;
-                      private VirtualDisplay virtualDisplay;
-                      private ImageReader imageReader;
-                      private static byte[] latestJpeg = null;
 
                       @Override
                       protected void onCreate(Bundle savedInstanceState) {
@@ -197,14 +184,13 @@ jobs:
 
                           tvStatus = findViewById(R.id.tv_status);
                           btnToggle = findViewById(R.id.btn_toggle);
-
                           projectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
 
                           btnToggle.setOnClickListener(v -> {
                               if (!isRunning) {
                                   startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE);
                               } else {
-                                  stopServer();
+                                  stopStreamService();
                               }
                           });
                       }
@@ -212,70 +198,35 @@ jobs:
                       @Override
                       protected void onActivityResult(int requestCode, int resultCode, Intent data) {
                           super.onActivityResult(requestCode, resultCode, data);
-                          if (requestCode == REQUEST_CODE && resultCode == RESULT_OK) {
-                              mediaProjection = projectionManager.getMediaProjection(resultCode, data);
-                              startVirtualDisplay();
-                              startServer();
+                          if (requestCode == REQUEST_CODE && resultCode == RESULT_OK && data != null) {
+                              startStreamService(resultCode, data);
                           } else {
                               Toast.makeText(this, "ถูกปฏิเสธสิทธิ์การบันทึกหน้าจอ", Toast.LENGTH_SHORT).show();
                           }
                       }
 
-                      private void startVirtualDisplay() {
-                          int width = 720;
-                          int height = 1280;
-                          imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
-                          virtualDisplay = mediaProjection.createVirtualDisplay("ScreenCapture",
-                                  width, height, getResources().getDisplayMetrics().densityDpi,
-                                  DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                                  imageReader.getSurface(), null, null);
+                      private void startStreamService(int resultCode, Intent data) {
+                          Intent serviceIntent = new Intent(this, StreamService.class);
+                          serviceIntent.putExtra("resultCode", resultCode);
+                          serviceIntent.putExtra("data", data);
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              startForegroundService(serviceIntent);
+                          } else {
+                              startService(serviceIntent);
+                          }
 
-                          imageReader.setOnImageAvailableListener(reader -> {
-                              Image image = reader.acquireLatestImage();
-                              if (image != null) {
-                                  Image.Plane[] planes = image.getPlanes();
-                                  ByteBuffer buffer = planes[0].getBuffer();
-                                  int pixelStride = planes[0].getPixelStride();
-                                  int rowStride = planes[0].getRowStride();
-                                  int rowPadding = rowStride - pixelStride * image.getWidth();
+                          isRunning = true;
+                          String ipAddress = getLocalIpAddress();
+                          String url = "http://" + ipAddress + ":" + PORT;
 
-                                  Bitmap bitmap = Bitmap.createBitmap(image.getWidth() + rowPadding / pixelStride, image.getHeight(), Bitmap.Config.ARGB_8888);
-                                  bitmap.copyPixelsFromBuffer(buffer);
-                                  image.close();
-
-                                  ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                                  bitmap.compress(Bitmap.CompressFormat.JPEG, 50, baos);
-                                  latestJpeg = baos.toByteArray();
-                              }
-                          }, new Handler(Looper.getMainLooper()));
+                          tvStatus.setText("🟢 สตรีมเซิร์ฟเวอร์ทำงานแล้ว!\\n\\nเปิด Browser ที่เครื่องอื่นแล้วพิมพ์:\\n" + url);
+                          btnToggle.setText("⏹️ หยุดการแชร์ (Stop)");
+                          btnToggle.setBackgroundColor(android.graphics.Color.parseColor("#d32f2f"));
                       }
 
-                      private void startServer() {
-                          try {
-                              webServer = new LocalWebServer(PORT);
-                              webServer.start();
-                              isRunning = true;
-
-                              String ipAddress = getLocalIpAddress();
-                              String url = "http://" + ipAddress + ":" + PORT;
-
-                              tvStatus.setText("🟢 สตรีมเซิร์ฟเวอร์ทำงานแล้ว!\\n\\nเปิด Browser ที่เครื่องอื่นแล้วพิมพ์:\\n" + url);
-                              btnToggle.setText("⏹️ หยุดการแชร์ (Stop)");
-                              btnToggle.setBackgroundColor(android.graphics.Color.parseColor("#d32f2f"));
-
-                          } catch (IOException e) {
-                              e.printStackTrace();
-                              tvStatus.setText("❌ เปิดเซิร์ฟเวอร์ไม่สำเร็จ: " + e.getMessage());
-                          }
-                      }
-
-                      private void stopServer() {
-                          if (webServer != null) {
-                              webServer.stop();
-                              webServer = null;
-                          }
-                          if (virtualDisplay != null) { virtualDisplay.release(); }
-                          if (mediaProjection != null) { mediaProjection.stop(); }
+                      private void stopStreamService() {
+                          Intent serviceIntent = new Intent(this, StreamService.class);
+                          stopService(serviceIntent);
                           isRunning = false;
 
                           tvStatus.setText("สถานะ: ปิดการทำงานแล้ว");
@@ -287,6 +238,166 @@ jobs:
                           WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
                           return Formatter.formatIpAddress(wifiManager.getConnectionInfo().getIpAddress());
                       }
+                  }
+              """,
+
+              "app/src/main/java/com/example/localstreamer/StreamService.java": """
+                  package com.example.localstreamer;
+
+                  import android.app.Notification;
+                  import android.app.NotificationChannel;
+                  import android.app.NotificationManager;
+                  import android.app.Service;
+                  import android.content.Context;
+                  import android.content.Intent;
+                  import android.content.pm.ServiceInfo;
+                  import android.graphics.Bitmap;
+                  import android.graphics.PixelFormat;
+                  import android.hardware.display.DisplayManager;
+                  import android.hardware.display.VirtualDisplay;
+                  import android.media.Image;
+                  import android.media.ImageReader;
+                  import android.media.projection.MediaProjection;
+                  import android.media.projection.MediaProjectionManager;
+                  import android.os.Build;
+                  import android.os.Handler;
+                  import android.os.HandlerThread;
+                  import android.os.IBinder;
+
+                  import java.io.ByteArrayInputStream;
+                  import java.io.ByteArrayOutputStream;
+                  import java.io.IOException;
+                  import java.nio.ByteBuffer;
+                  import fi.iki.elonen.NanoHTTPD;
+
+                  public class StreamService extends Service {
+                      private MediaProjection mediaProjection;
+                      private VirtualDisplay virtualDisplay;
+                      private ImageReader imageReader;
+                      private LocalWebServer webServer;
+                      private HandlerThread handlerThread;
+                      private Handler backgroundHandler;
+                      public static volatile byte[] latestJpeg = null;
+
+                      @Override
+                      public void onCreate() {
+                          super.onCreate();
+                          handlerThread = new HandlerThread("ScreenCaptureThread");
+                          handlerThread.start();
+                          backgroundHandler = new Handler(handlerThread.getLooper());
+                      }
+
+                      @Override
+                      public int onStartCommand(Intent intent, int flags, int startId) {
+                          createNotificationChannel();
+                          Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
+                                  new Notification.Builder(this, "STREAM_CH") : new Notification.Builder(this);
+
+                          Notification notification = builder
+                                  .setContentTitle("Local Home Streamer")
+                                  .setContentText("กำลังแชร์หน้าจอผ่าน Wi-Fi...")
+                                  .setSmallIcon(android.R.drawable.ic_menu_slideshow)
+                                  .build();
+
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                              startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+                          } else {
+                              startForeground(1, notification);
+                          }
+
+                          if (intent != null && intent.hasExtra("data")) {
+                              int resultCode = intent.getIntExtra("resultCode", -1);
+                              Intent data = intent.getParcelableExtra("data");
+                              startCapture(resultCode, data);
+                              startServer();
+                          }
+                          return START_NOT_STICKY;
+                      }
+
+                      private void startCapture(int resultCode, Intent data) {
+                          MediaProjectionManager pm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+                          mediaProjection = pm.getMediaProjection(resultCode, data);
+
+                          mediaProjection.registerCallback(new MediaProjection.Callback() {
+                              @Override
+                              public void onStop() {
+                                  stopSelf();
+                              }
+                          }, backgroundHandler);
+
+                          int width = 720;
+                          int height = 1280;
+                          imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
+                          virtualDisplay = mediaProjection.createVirtualDisplay("ScreenStream",
+                                  width, height, getResources().getDisplayMetrics().densityDpi,
+                                  DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                                  imageReader.getSurface(), null, backgroundHandler);
+
+                          imageReader.setOnImageAvailableListener(reader -> {
+                              Image image = null;
+                              try {
+                                  image = reader.acquireLatestImage();
+                                  if (image != null) {
+                                      Image.Plane[] planes = image.getPlanes();
+                                      ByteBuffer buffer = planes[0].getBuffer();
+                                      int pixelStride = planes[0].getPixelStride();
+                                      int rowStride = planes[0].getRowStride();
+                                      int rowPadding = rowStride - pixelStride * width;
+
+                                      Bitmap bitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888);
+                                      bitmap.copyPixelsFromBuffer(buffer);
+                                      Bitmap cropped = Bitmap.createBitmap(bitmap, 0, 0, width, height);
+
+                                      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                      cropped.compress(Bitmap.CompressFormat.JPEG, 50, baos);
+                                      latestJpeg = baos.toByteArray();
+
+                                      cropped.recycle();
+                                      bitmap.recycle();
+                                  }
+                              } catch (Exception e) {
+                              } finally {
+                                  if (image != null) {
+                                      image.close();
+                                  }
+                              }
+                          }, backgroundHandler);
+                      }
+
+                      private void startServer() {
+                          try {
+                              if (webServer == null) {
+                                  webServer = new LocalWebServer(8080);
+                                  webServer.start();
+                              }
+                          } catch (IOException e) {
+                              e.printStackTrace();
+                          }
+                      }
+
+                      private void createNotificationChannel() {
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              NotificationChannel channel = new NotificationChannel(
+                                      "STREAM_CH", "Stream Service", NotificationManager.IMPORTANCE_LOW);
+                              NotificationManager manager = getSystemService(NotificationManager.class);
+                              if (manager != null) manager.createNotificationChannel(channel);
+                          }
+                      }
+
+                      @Override
+                      public void onDestroy() {
+                          super.onDestroy();
+                          if (webServer != null) webServer.stop();
+                          if (virtualDisplay != null) virtualDisplay.release();
+                          if (imageReader != null) imageReader.close();
+                          if (mediaProjection != null) mediaProjection.stop();
+                          if (handlerThread != null) handlerThread.quitSafely();
+                      }
+
+                      @Override
+                      public IBinder onBind(Intent intent) {
+                          return null;
+                      }
 
                       private static class LocalWebServer extends NanoHTTPD {
                           public LocalWebServer(int port) {
@@ -296,51 +407,33 @@ jobs:
                           @Override
                           public Response serve(IHTTPSession session) {
                               String uri = session.getUri();
-                              if ("/stream".equals(uri)) {
-                                  return new ChunkedResponse();
+                              if ("/frame.jpg".equals(uri)) {
+                                  byte[] frame = latestJpeg;
+                                  if (frame == null || frame.length == 0) {
+                                      return newFixedLengthResponse(Response.Status.SERVICE_UNAVAILABLE, "text/plain", "Waiting...");
+                                  }
+                                  Response res = newFixedLengthResponse(Response.Status.OK, "image/jpeg", new ByteArrayInputStream(frame), frame.length);
+                                  res.addHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+                                  return res;
                               }
 
-                              String html = "<Html><head><title>Home Streamer</title>" +
+                              String html = "<!DOCTYPE html><html><head><title>Home Streamer</title>" +
                                       "<meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1.0\\">" +
-                                      "<style>body{background:#111;color:#fff;text-align:center;font-family:sans-serif;margin:0;padding:20px;}" +
-                                      "h2{color:#00e676;margin:5px;}" +
-                                      "img{max-width:100%;height:auto;border:2px solid #00e676;border-radius:8px;margin-top:10px;}</style>" +
+                                      "<style>body{background:#111;color:#fff;text-align:center;font-family:sans-serif;margin:0;padding:10px;}" +
+                                      "h2{color:#00e676;margin:8px 0;}" +
+                                      "img{max-width:100%;max-height:85vh;border:2px solid #00e676;border-radius:8px;}</style>" +
                                       "</head><body>" +
                                       "<h2>🏠 Home Screen Stream</h2>" +
-                                      "<p style=\\"color:#aaa;font-size:12px;\\">ถ่ายทอดสดหน้าจอแบบเรียลไทม์ภายในบ้าน</p>" +
-                                      "<img src=\\"/stream\\" />" +
+                                      "<img id=\\"screen\\" src=\\"/frame.jpg\\" />" +
+                                      "<script>" +
+                                      "const img = document.getElementById('screen');" +
+                                      "function update() { img.src = '/frame.jpg?t=' + new Date().getTime(); }" +
+                                      "img.onload = () => setTimeout(update, 80);" +
+                                      "img.onerror = () => setTimeout(update, 500);" +
+                                      "</script>" +
                                       "</body></html>";
-                              return newFixedLengthResponse(Response.Status.OK, "text/html", html);
+                              return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", html);
                           }
-                      }
-
-                      private static class ChunkedResponse extends NanoHTTPD.Response {
-                          public ChunkedResponse() {
-                              super(NanoHTTPD.Status.OK, "multipart/x-mixed-replace; boundary=frame", null);
-                          }
-
-                          @Override
-                          protected void send(java.io.OutputStream outputStream) {
-                              try {
-                                  while (latestJpeg != null) {
-                                      if (latestJpeg.length > 0) {
-                                          String header = "--frame\\r\\nContent-Type: image/jpeg\\r\\nContent-Length: " + latestJpeg.length + "\\r\\n\\r\\n";
-                                          outputStream.write(header.getBytes());
-                                          outputStream.write(latestJpeg);
-                                          outputStream.write("\\r\\n".getBytes());
-                                          outputStream.flush();
-                                      }
-                                      Thread.sleep(100);
-                                  }
-                              } catch (Exception e) {
-                              }
-                          }
-                      }
-
-                      @Override
-                      protected void onDestroy() {
-                          super.onDestroy();
-                          stopServer();
                       }
                   }
               """
@@ -353,7 +446,7 @@ jobs:
               with open(full_path, "w", encoding="utf-8") as f:
                   f.write(clean_content)
 
-          print("Local Streamer Project v2.1 generated successfully!")
+          print("Local Streamer Project v2.3 generated successfully!")
           EOF
 
       - name: Set up JDK 17
@@ -362,12 +455,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build Debug APK
+      - name: Download and Run Gradle 8.4 Directly
         working-directory: ./LocalStreamerProject
-        run: gradle assembleDebug
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip
+          unzip -q gradle-8.4-bin.zip
+          ./gradle-8.4/bin/gradle assembleDebug --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LocalStreamer-v2.1-APK
+          name: LocalStreamer-v2.3-APK
           path: LocalStreamerProject/app/build/outputs/apk/debug/app-debug.apk
