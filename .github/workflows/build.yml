@@ -1,4 +1,4 @@
-name: Build Local Web Streamer APK v3.5 (Single File)
+name: Build Local Web Streamer APK v3.9 (Single File)
 
 on:
   push:
@@ -26,28 +26,45 @@ jobs:
           os.makedirs('app/src/main/java/com/example/localstreamer', exist_ok=True)
           os.makedirs('app/src/main/res/layout', exist_ok=True)
 
-          with open('settings.gradle', 'w') as f:
-              f.write('''pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() } }
+          def write_file(path, content):
+              with open(path, 'w', encoding='utf-8') as f:
+                  f.write(content.lstrip())
+
+          write_file('settings.gradle', r'''
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           rootProject.name = 'LocalStreamer'
           include ':app'
           ''')
 
-          with open('build.gradle', 'w') as f:
-              f.write('''plugins {
-                  id 'com.android.application' version '8.1.4' apply false
-              }
-              ''')
+          write_file('build.gradle', r'''
+          plugins {
+              id 'com.android.application' version '8.1.4' apply false
+          }
+          ''')
 
-          with open('gradle.properties', 'w') as f:
-              f.write('''org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          write_file('gradle.properties', r'''
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           android.nonTransitiveRClass=true
           ''')
 
-          with open('app/build.gradle', 'w') as f:
-              f.write('''plugins { id 'com.android.application' }
+          write_file('app/build.gradle', r'''
+          plugins {
+              id 'com.android.application'
+          }
 
           android {
               namespace 'com.example.localstreamer'
@@ -63,7 +80,9 @@ jobs:
 
               buildTypes {
                   debug { }
-                  release { minifyEnabled false }
+                  release {
+                      minifyEnabled false
+                  }
               }
 
               compileOptions {
@@ -73,12 +92,13 @@ jobs:
           }
 
           dependencies {
+              implementation 'org.nanohttpd:nanohttpd:2.3.1'
               implementation 'org.nanohttpd:nanohttpd-websocket:2.3.1'
           }
           ''')
 
-          with open('app/src/main/AndroidManifest.xml', 'w') as f:
-              f.write('''<?xml version="1.0" encoding="utf-8"?>
+          write_file('app/src/main/AndroidManifest.xml', r'''
+          <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -119,8 +139,56 @@ jobs:
           </manifest>
           ''')
 
-          with open('app/src/main/java/com/example/localstreamer/MainActivity.java', 'w') as f:
-              f.write('''package com.example.localstreamer;
+          write_file('app/src/main/res/layout/activity_main.xml', r'''
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center"
+              android:padding="24dp"
+              android:background="#121212">
+
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="LOCAL HOME STREAMER v3.5"
+                  android:textColor="#00e676"
+                  android:textSize="24sp"
+                  android:textStyle="bold"
+                  android:paddingBottom="18dp" />
+
+              <TextView
+                  android:id="@+id/tv_status"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="พร้อมสตรีมหน้าจอผ่าน Wi-Fi เดียวกัน"
+                  android:textColor="#ffffff"
+                  android:textSize="17sp"
+                  android:gravity="center"
+                  android:padding="12dp" />
+
+              <Button
+                  android:id="@+id/btn_toggle"
+                  android:layout_width="320dp"
+                  android:layout_height="64dp"
+                  android:text="เริ่มสตรีมหน้าจอ"
+                  android:textSize="18sp"
+                  android:focusable="true" />
+
+              <TextView
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="Android 9: ใช้ไมโครโฟน | Android 10+: จับเสียงภายในเมื่อแอปต้นทางอนุญาต"
+                  android:textColor="#aaaaaa"
+                  android:textSize="13sp"
+                  android:gravity="center"
+                  android:paddingTop="18dp" />
+          </LinearLayout>
+          ''')
+
+          write_file('app/src/main/java/com/example/localstreamer/MainActivity.java', r'''
+          package com.example.localstreamer;
 
           import android.Manifest;
           import android.app.Activity;
@@ -208,8 +276,8 @@ jobs:
 
                   running = true;
                   String url = "http://" + getLocalIpAddress() + ":8080";
-                  tvStatus.setText("สตรีมมิ่งหน้าจอฟรีแล้ว!\\n\\nเปิด Browser ไปที่ IP Wi-Fi:\\n" + url +
-                          "\\n\\nAndroid 10+: เปิดหน้าเว็บเพื่อดูภาพ\\nAndroid 9: อาจต้องใช้ความช่วยเหลือ");
+                  tvStatus.setText("กำลังสตรีมหน้าจอ!\n\nเปิด Browser ไปที่ IP Wi-Fi:\n" + url +
+                          "\n\nAndroid 10+: จับเสียงภายในระบบ\nAndroid 9: ใช้ไมโครโฟน");
                   btnToggle.setText("หยุดสตรีมหน้าจอ");
               }
 
@@ -220,6 +288,7 @@ jobs:
                   btnToggle.setText("เริ่มสตรีมหน้าจอ");
               }
 
+              @SuppressWarnings("deprecation")
               private String getLocalIpAddress() {
                   try {
                       ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -244,8 +313,8 @@ jobs:
           }
           ''')
 
-          with open('app/src/main/java/com/example/localstreamer/StreamService.java', 'w') as f:
-              f.write('''package com.example.localstreamer;
+          write_file('app/src/main/java/com/example/localstreamer/StreamService.java', r'''
+          package com.example.localstreamer;
 
           import android.Manifest;
           import android.annotation.SuppressLint;
@@ -306,7 +375,7 @@ jobs:
               private volatile int captureWidth = 960;
               private volatile int captureHeight = 540;
               private volatile boolean audioRestartPending = false;
-              private long audioPacketCount = 0;
+              private volatile long audioPacketCount = 0;
 
               @Override
               public void onCreate() {
@@ -317,6 +386,7 @@ jobs:
               }
 
               @Override
+              @SuppressWarnings("deprecation")
               public int onStartCommand(Intent intent, int flags, int startId) {
                   createNotificationChannel();
                   Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
@@ -348,8 +418,11 @@ jobs:
 
                   int resultCode = intent.getIntExtra("resultCode", -1);
                   Intent data;
-                  if (Build.VERSION.SDK_INT >= 33) data = intent.getParcelableExtra("projectionData", Intent.class);
-                  else data = intent.getParcelableExtra("projectionData");
+                  if (Build.VERSION.SDK_INT >= 33) {
+                      data = intent.getParcelableExtra("projectionData", Intent.class);
+                  } else {
+                      data = intent.getParcelableExtra("projectionData");
+                  }
 
                   try {
                       startProjection(resultCode, data);
@@ -390,6 +463,7 @@ jobs:
 
               private final Runnable resizeCaptureRunnable = () -> updateCaptureSurface(true);
 
+              @SuppressWarnings("deprecation")
               private void updateCaptureSurface(boolean allowResize) {
                   WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
                   DisplayMetrics metrics = new DisplayMetrics();
@@ -656,7 +730,7 @@ jobs:
                           return response;
                       }
                       if ("/status".equals(uri)) {
-                          String json = "{\\"streaming\\":true,\\"audio\\":\\"" + audioMode + "\\",\\"width\\":" + captureWidth + ",\\"height\\":\\"" + captureHeight + "\",\\"sampleRate\\":" + SAMPLE_RATE + ",\\"audioPackets\\":" + audioPacketCount + "}";
+                          String json = "{\"streaming\":true,\"audio\":\"" + audioMode + "\",\"width\":" + captureWidth + ",\"height\":" + captureHeight + ",\"sampleRate\":" + SAMPLE_RATE + ",\"audioPackets\":" + audioPacketCount + "}";
                           return newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", json);
                       }
                       return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", pageHtml());
@@ -664,7 +738,11 @@ jobs:
               }
 
               private String pageHtml() {
-                  return "<!DOCTYPE html><html lang=\\"th\\"><head><meta charset=\\"utf-8\\"><meta name=\\"viewport\\" content=\\"width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover\\"><meta name=\\"apple-mobile-web-app-capable\\" content=\\"yes\\"><meta name=\\"apple-mobile-web-app-status-bar-style\\" content=\\"black-translucent\\"><meta name=\\"theme-color\\" content=\\"#000000\\"><title>Local Home Streamer 3.5</title><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:100%;height:100%;background:#000;color:#fff;font-family:Arial,sans-serif;overflow:hidden}body{position:fixed;inset:0;touch-action:manipulation}#stage{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;display:flex;align-items:center;justify-content:center;background:#000;overflow:hidden}#screen{display:block;width:100%;height:100%;object-fit:cover;background:#000}body.orientation-mismatch #screen{object-fit:contain}#bar{position:fixed;z-index:5;top:max(10px,env(safe-area-inset-top));left:0;right:0;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;padding:0 8px;transition:opacity .25s}button{border:0;border-radius:24px;padding:11px 16px;background:rgba(0,190,80,.94);color:white;font-size:14px;font-weight:700;box-shadow:0 2px 8px #0008}#hint{position:fixed;bottom:max(10px,env(safe-area-inset-bottom));left:0;right:0;text-align:center;color:#ddd;font-size:12px;text-shadow:0 1px 3px #000;pointer-events:none;padding:0 12px}body.clean #bar,body.clean #hint{opacity:0;pointer-events:none}#status{font-size:12px;color:#fff;align-self:center;text-shadow:0 1px 4px #000;max-width:90vw;text-align:center}body.pseudo-fullscreen #stage{inset:0;width:100vw;height:100vh;height:100dvh}</style></head><body><main id=\\"stage\\"><img id=\\"screen\\" alt=\\"Live screen stream\\" draggable=\\"false\\"></main><nav id=\\"bar\\"><button id=\\"fullBtn\\" type=\\"button\\">⛶ ขยาย / ย่อจอ</button><button id=\\"audioBtn\\" type=\\"button\\">🔊 เปิดเสียง</button><span id=\\"status\\">กำลังโหลด...</span></nav><div id=\\"hint\\">แตะเพื่อซ่อน/แสดงเมนู | iOS: แตะปุ่มเปิดเสียงก่อน</div><script>const img=document.getElementById('screen');const statusEl=document.getElementById('status');let hideTimer=null,sourceW=960,sourceH=540,frameBusy=false,frameTimer=null;let audioCtx=null,audioGain=null,socket=null,audioWanted=false,retryTimer=null,nextAudioTime=0;let lastPacketAt=0;function refreshFrame(){if(frameBusy)return;frameBusy=true;img.src='/frame.jpg?t='+Date.now()}img.onload=()=>{frameBusy=false;clearTimeout(frameTimer);frameTimer=setTimeout(refreshFrame,50)};img.onerror=()=>{frameBusy=false;clearTimeout(frameTimer);frameTimer=setTimeout(refreshFrame,180)};refreshFrame();function showControls(){document.body.classList.remove('clean');clearTimeout(hideTimer);hideTimer=setTimeout(()=>document.body.classList.add('clean'),4500)}document.addEventListener('pointerdown',showControls,{passive:true});showControls();function applyOrientation(){const sourceLandscape=sourceW>=sourceH;const receiverLandscape=window.innerWidth>=window.innerHeight;const mismatch=sourceLandscape!==receiverLandscape;document.body.classList.toggle('orientation-mismatch',mismatch)}window.addEventListener('resize',applyOrientation);window.addEventListener('orientationchange',()=>setTimeout(applyOrientation,300));async function updateStatus(){try{const s=await fetch('/status',{cache:'no-store'}).then(r=>r.json());sourceW=s.width||sourceW;sourceH=s.height||sourceH;applyOrientation();if(!document.body.classList.contains('orientation-mismatch')){statusEl.textContent='หน้าจอ '+sourceW+'x'+sourceH+' | '+s.audio+' | (เสียง: '+s.audioPackets+')'}}catch(e){statusEl.textContent='กำลังเชื่อมต่อเซิร์ฟเวอร์...'}}updateStatus();setInterval(updateStatus,2500);async function toggleFullscreen(){try{if(!document.fullscreenElement&&document.documentElement.requestFullscreen){await document.documentElement.requestFullscreen()}else if(document.fullscreenElement){await document.exitFullscreen()}else{document.body.classList.toggle('pseudo-fullscreen')}if(document.fullscreenElement&&screen.orientation&&screen.orientation.lock){await screen.orientation.lock(sourceW>=sourceH?'landscape':'portrait').catch(()=>{})}}catch(e){document.body.classList.toggle('pseudo-fullscreen')}applyOrientation();showControls()}document.getElementById('fullBtn').addEventListener('click',toggleFullscreen);function connectAudioSocket(){if(!audioWanted||(socket&&socket.readyState<=1))return;const scheme=location.protocol==='https:'?'wss:':'ws:';try{socket=new WebSocket(scheme+location.host+'/audio');socket.binaryType='arraybuffer'}catch(e){scheduleReconnect();return}socket.onopen=()=>{nextAudioTime=0;statusEl.textContent='เชื่อมต่อเสียงสำเร็จ'};socket.onmessage=e=>{if(!(e.data instanceof ArrayBuffer)||!audioCtx||!audioGain)return;const count=e.data.byteLength>>1;if(!count)return;lastPacketAt=Date.now();const view=new DataView(e.data),raw=new Float32Array(count);for(let i=0;i<count;i++)raw[i]=view.getInt16(i*2,true)/32768;const targetRate=audioCtx.sampleRate;let samples=raw;if(targetRate!==44100){const n=Math.max(1,Math.round(count*targetRate/44100));samples=new Float32Array(n);const step=44100/targetRate;for(let i=0;i<n;i++){const pos=i*step,lo=Math.min(count-1,Math.floor(pos));const hi=Math.min(count-1,lo+1),frac=pos-lo;samples[i]=raw[lo]*(1-frac)+raw[hi]*frac}}const buffer=audioCtx.createBuffer(1,samples.length,targetRate);buffer.copyToChannel(samples,0);const node=audioCtx.createBufferSource();node.buffer=buffer;node.connect(audioGain);const now=audioCtx.currentTime;if(nextAudioTime<now+0.035||nextAudioTime>now+0.30)nextAudioTime=now+0.055;node.start(nextAudioTime);nextAudioTime+=buffer.duration;node.onended=()=>{try{node.disconnect()}catch(e){}};};socket.onerror=()=>{statusEl.textContent='เกิดข้อผิดพลาดในการเชื่อมต่อเสียง'};socket.onclose=()=>{socket=null;nextAudioTime=0;if(audioWanted)scheduleReconnect()};}function scheduleReconnect(){if(!audioWanted||retryTimer)return;retryTimer=setTimeout(()=>{retryTimer=null;connectAudioSocket()},1200)}async function startAudio(){const AudioCtx=window.AudioContext||window.webkitAudioContext;if(!AudioCtx){statusEl.textContent='เบราว์เซอร์ไม่รองรับ Web Audio';return}try{audioCtx=audioCtx||new AudioCtx({latencyHint:'interactive'});await audioCtx.resume();if(!audioGain){audioGain=audioCtx.createGain();audioGain.gain.value=1.0;audioGain.connect(audioCtx.destination)}audioWanted=true;lastPacketAt=0;nextAudioTime=0;connectAudioSocket();document.getElementById('audioBtn').textContent='🔊 ปิดเสียง';showControls()}catch(e){statusEl.textContent='ไม่สามารถเปิดเสียงได้: '+e.message}}function stopAudio(){audioWanted=false;clearTimeout(retryTimer);retryTimer=null;nextAudioTime=0;if(socket){try{socket.close()}catch(e){}socket=null}document.getElementById('audioBtn').textContent='🔊 เปิดเสียง'}document.getElementById('audioBtn').addEventListener('click',()=>{if(audioWanted)stopAudio();else startAudio();showControls()});setInterval(()=>{if(audioWanted&&lastPacketAt&&Date.now()-lastPacketAt>2500){statusEl.textContent='เชื่อมต่อแล้ว (รอรับข้อมูลเสียง...)';}},1000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&audioWanted){if(audioCtx)audioCtx.resume().catch(()=>{});if(!socket||socket.readyState>1)connectAudioSocket()}});window.addEventListener('online',()=>{if(audioWanted)connectAudioSocket()});</script></body></html>''')
+                  return "<!DOCTYPE html><html lang=\"th\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover\"><meta name=\"apple-mobile-web-app-capable\" content=\"yes\"><meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black-translucent\"><meta name=\"theme-color\" content=\"#000000\"><title>Local Home Streamer 3.5</title><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:100%;height:100%;background:#000;color:#fff;font-family:Arial,sans-serif;overflow:hidden}body{position:fixed;inset:0;touch-action:manipulation}#stage{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;display:flex;align-items:center;justify-content:center;background:#000;overflow:hidden}#screen{display:block;width:100%;height:100%;object-fit:cover;background:#000}body.orientation-mismatch #screen{object-fit:contain}#bar{position:fixed;z-index:5;top:max(10px,env(safe-area-inset-top));left:0;right:0;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;padding:0 8px;transition:opacity .25s}button{border:0;border-radius:24px;padding:11px 16px;background:rgba(0,190,80,.94);color:white;font-size:14px;font-weight:700;box-shadow:0 2px 8px #0008}#hint{position:fixed;bottom:max(10px,env(safe-area-inset-bottom));left:0;right:0;text-align:center;color:#ddd;font-size:12px;text-shadow:0 1px 3px #000;pointer-events:none;padding:0 12px}body.clean #bar,body.clean #hint{opacity:0;pointer-events:none}#status{font-size:12px;color:#fff;align-self:center;text-shadow:0 1px 4px #000;max-width:90vw;text-align:center}body.pseudo-fullscreen #stage{inset:0;width:100vw;height:100vh;height:100dvh}</style></head><body><main id=\"stage\"><img id=\"screen\" alt=\"Live screen stream\" draggable=\"false\"></main><nav id=\"bar\"><button id=\"fullBtn\" type=\"button\">⛶ ขยาย / ย่อจอ</button><button id=\"audioBtn\" type=\"button\">🔊 เปิดเสียง</button><span id=\"status\">กำลังโหลด...</span></nav><div id=\"hint\">แตะเพื่อซ่อน/แสดงเมนู | iOS: แตะปุ่มเปิดเสียงก่อน</div><script>const img=document.getElementById('screen');const statusEl=document.getElementById('status');let hideTimer=null,sourceW=960,sourceH=540,frameBusy=false,frameTimer=null;let audioCtx=null,audioGain=null,socket=null,audioWanted=false,retryTimer=null,nextAudioTime=0;let lastPacketAt=0;function refreshFrame(){if(frameBusy)return;frameBusy=true;img.src='/frame.jpg?t='+Date.now()}img.onload=()=>{frameBusy=false;clearTimeout(frameTimer);frameTimer=setTimeout(refreshFrame,50)};img.onerror=()=>{frameBusy=false;clearTimeout(frameTimer);frameTimer=setTimeout(refreshFrame,180)};refreshFrame();function showControls(){document.body.classList.remove('clean');clearTimeout(hideTimer);hideTimer=setTimeout(()=>document.body.classList.add('clean'),4500)}document.addEventListener('pointerdown',showControls,{passive:true});showControls();function applyOrientation(){const sourceLandscape=sourceW>=sourceH;const receiverLandscape=window.innerWidth>=window.innerHeight;const mismatch=sourceLandscape!==receiverLandscape;document.body.classList.toggle('orientation-mismatch',mismatch)}window.addEventListener('resize',applyOrientation);window.addEventListener('orientationchange',()=>setTimeout(applyOrientation,300));async function updateStatus(){try{const s=await fetch('/status',{cache:'no-store'}).then(r=>r.json());sourceW=s.width||sourceW;sourceH=s.height||sourceH;applyOrientation();if(!document.body.classList.contains('orientation-mismatch')){statusEl.textContent='หน้าจอ '+sourceW+'x'+sourceH+' | '+s.audio+' | (เสียง: '+s.audioPackets+')'}}catch(e){statusEl.textContent='กำลังเชื่อมต่อเซิร์ฟเวอร์...'}}updateStatus();setInterval(updateStatus,2500);async function toggleFullscreen(){try{if(!document.fullscreenElement&&document.documentElement.requestFullscreen){await document.documentElement.requestFullscreen()}else if(document.fullscreenElement){await document.exitFullscreen()}else{document.body.classList.toggle('pseudo-fullscreen')}if(document.fullscreenElement&&screen.orientation&&screen.orientation.lock){await screen.orientation.lock(sourceW>=sourceH?'landscape':'portrait').catch(()=>{})}}catch(e){document.body.classList.toggle('pseudo-fullscreen')}applyOrientation();showControls()}document.getElementById('fullBtn').addEventListener('click',toggleFullscreen);function connectAudioSocket(){if(!audioWanted||(socket&&socket.readyState<=1))return;const scheme=location.protocol==='https:'?'wss:':'ws:';try{socket=new WebSocket(scheme+location.host+'/audio');socket.binaryType='arraybuffer'}catch(e){scheduleReconnect();return}socket.onopen=()=>{nextAudioTime=0;statusEl.textContent='เชื่อมต่อเสียงสำเร็จ'};socket.onmessage=e=>{if(!(e.data instanceof ArrayBuffer)||!audioCtx||!audioGain)return;const count=e.data.byteLength>>1;if(!count)return;lastPacketAt=Date.now();const view=new DataView(e.data),raw=new Float32Array(count);for(let i=0;i<count;i++)raw[i]=view.getInt16(i*2,true)/32768;const targetRate=audioCtx.sampleRate;let samples=raw;if(targetRate!==44100){const n=Math.max(1,Math.round(count*targetRate/44100));samples=new Float32Array(n);const step=44100/targetRate;for(let i=0;i<n;i++){const pos=i*step,lo=Math.min(count-1,Math.floor(pos));const hi=Math.min(count-1,lo+1),frac=pos-lo;samples[i]=raw[lo]*(1-frac)+raw[hi]*frac}}const buffer=audioCtx.createBuffer(1,samples.length,targetRate);buffer.copyToChannel(samples,0);const node=audioCtx.createBufferSource();node.buffer=buffer;node.connect(audioGain);const now=audioCtx.currentTime;if(nextAudioTime<now+0.035||nextAudioTime>now+0.30)nextAudioTime=now+0.055;node.start(nextAudioTime);nextAudioTime+=buffer.duration;node.onended=()=>{try{node.disconnect()}catch(e){}};};socket.onerror=()=>{statusEl.textContent='เกิดข้อผิดพลาดในการเชื่อมต่อเสียง'};socket.onclose=()=>{socket=null;nextAudioTime=0;if(audioWanted)scheduleReconnect()};}function scheduleReconnect(){if(!audioWanted||retryTimer)return;retryTimer=setTimeout(()=>{retryTimer=null;connectAudioSocket()},1200)}async function startAudio(){const AudioCtx=window.AudioContext||window.webkitAudioContext;if(!AudioCtx){statusEl.textContent='เบราว์เซอร์ไม่รองรับ Web Audio';return}try{audioCtx=audioCtx||new AudioCtx({latencyHint:'interactive'});await audioCtx.resume();if(!audioGain){audioGain=audioCtx.createGain();audioGain.gain.value=1.0;audioGain.connect(audioCtx.destination)}audioWanted=true;lastPacketAt=0;nextAudioTime=0;connectAudioSocket();document.getElementById('audioBtn').textContent='🔊 ปิดเสียง';showControls()}catch(e){statusEl.textContent='ไม่สามารถเปิดเสียงได้: '+e.message}}function stopAudio(){audioWanted=false;clearTimeout(retryTimer);retryTimer=null;nextAudioTime=0;if(socket){try{socket.close()}catch(e){}socket=null}document.getElementById('audioBtn').textContent='🔊 เปิดเสียง'}document.getElementById('audioBtn').addEventListener('click',()=>{if(audioWanted)stopAudio();else startAudio();showControls()});setInterval(()=>{if(audioWanted&&lastPacketAt&&Date.now()-lastPacketAt>2500){statusEl.textContent='เชื่อมต่อแล้ว (รอรับข้อมูลเสียง...)';}},1000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&audioWanted){if(audioCtx)audioCtx.resume().catch(()=>{});if(!socket||socket.readyState>1)connectAudioSocket()}});window.addEventListener('online',()=>{if(audioWanted)connectAudioSocket()});</script></body></html>";
+              }
+          }
+          ''')
+
           print('Local Home Streamer v3.5 project generated successfully')
           PY
 
